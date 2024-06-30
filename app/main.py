@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.models import User, UserCreate, UserInDB
 from bson import ObjectId
-from typing import List
 
 app = FastAPI(
     title="FastAPI with MongoDB",
