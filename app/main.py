@@ -1,12 +1,11 @@
-# app/main.py
-
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorClient
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import os
+from hashlib import sha256
+import base64
 
 from .models import User, UserInDB, Token, TokenData
 
@@ -15,24 +14,31 @@ app = FastAPI()
 # MongoDB connection
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 client = AsyncIOMotorClient(MONGODB_URL)
-db = client.yourdbname
+db = client.aureus
 
 # Security
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 # Helper functions
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def get_password_hash(password: str) -> str:
+    salt = os.urandom(32)
+    key = sha256(password.encode("utf-8") + salt).digest()
+    return base64.urlsafe_b64encode(salt + key).decode("utf-8")
 
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def verify_password(plain_password: str, stored_password: str) -> bool:
+    try:
+        decoded = base64.urlsafe_b64decode(stored_password)
+        salt, key = decoded[:32], decoded[32:]
+        new_key = sha256(plain_password.encode("utf-8") + salt).digest()
+        return key == new_key
+    except:
+        return False
 
 
 async def get_user(username: str):
@@ -45,7 +51,7 @@ async def authenticate_user(username: str, password: str):
     user = await get_user(username)
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user.password):
         return False
     return user
 
@@ -105,9 +111,11 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 @app.post("/users/", response_model=User)
 async def create_user(user: UserInDB):
-    hashed_password = get_password_hash(user.hashed_password)
-    user_dict = user.dict()
-    user_dict["hashed_password"] = hashed_password
+    password = get_password_hash(
+        user.password
+    )  # user.password should contain the plain password
+    user_dict = user.model_dump()
+    user_dict["password"] = password
     new_user = await db.users.insert_one(user_dict)
     created_user = await db.users.find_one({"_id": new_user.inserted_id})
     return User(**created_user)
