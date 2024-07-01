@@ -1,68 +1,119 @@
-from fastapi import FastAPI, HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient
-from app.models import User, UserCreate, UserInDB
-from bson import ObjectId
+# app/main.py
 
-app = FastAPI(
-    title="FastAPI with MongoDB",
-    description="This is a FastAPI application with MongoDB integration.",
-    version="1.0.0",
-    contact={
-        "name": "Sourabh Raikwar",
-        "email": "sourabhraikwar11111@example.com",
-    },
-)
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from motor.motor_asyncio import AsyncIOMotorClient
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+import os
+
+from .models import User, UserInDB, Token, TokenData
+
+app = FastAPI()
 
 # MongoDB connection
-client = AsyncIOMotorClient("mongodb://localhost:27017")
-db = client.aureus
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+client = AsyncIOMotorClient(MONGODB_URL)
+db = client.yourdbname
+
+# Security
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-@app.post("/users/")
-async def create_user(user: UserCreate):
-    user_dict = user.model_dump()
-    user_in_db = UserInDB(**user_dict)
-    result = await db.users.insert_one(user_in_db.model_dump(by_alias=True))
-    user_in_db.id = result.inserted_id
-    return User(**user_in_db.model_dump(by_alias=True))
+# Helper functions
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-@app.get("/users/")
-async def read_users():
-    users = await db.users.find().to_list(1000)
-    return [User(**user) for user in users]
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 
-@app.get("/users/{user_id}")
-async def read_user(user_id: str):
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return User(**user)
+async def get_user(username: str):
+    user = await db.users.find_one({"username": username})
+    if user:
+        return UserInDB(**user)
 
 
-@app.put("/users/{user_id}")
-async def update_user(user_id: str, user: UserCreate):
-    update_data = user.model_dump(exclude_unset=True)
-    result = await db.users.update_one(
-        {"_id": ObjectId(user_id)}, {"$set": update_data}
+async def authenticate_user(username: str, password: str):
+    user = await get_user(username)
+    if not user:
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user
+
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    user_in_db = await db.users.find_one({"_id": ObjectId(user_id)})
-    return User(**user_in_db)
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user = await get_user(username=token_data.username)
+    if user is None:
+        raise credentials_exception
+    return user
 
 
-@app.delete("/users/{user_id}")
-async def delete_user(user_id: str):
-    result = await db.users.delete_one({"_id": ObjectId(user_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User deleted successfully"}
+# Routes
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
-# Start the FastAPI application
+@app.get("/users/me", response_model=User)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@app.post("/users/", response_model=User)
+async def create_user(user: UserInDB):
+    hashed_password = get_password_hash(user.hashed_password)
+    user_dict = user.dict()
+    user_dict["hashed_password"] = hashed_password
+    new_user = await db.users.insert_one(user_dict)
+    created_user = await db.users.find_one({"_id": new_user.inserted_id})
+    return User(**created_user)
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

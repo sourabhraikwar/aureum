@@ -1,38 +1,20 @@
-from pydantic import BaseModel, EmailStr, Field
+# app/models.py
+
+from pydantic import BaseModel, Field
 from bson import ObjectId
-from typing import Optional
 
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+class User(BaseModel):
+    username: str
+    email: str
+    full_name: str = None
+    disabled: bool = False
 
-    @classmethod
-    def validate(cls, *args):
-        for v in args:
-            if not ObjectId.is_valid(v):
-                raise ValueError('Invalid objectid')
-            return ObjectId(v)
+class UserInDB(User):
+    hashed_password: str
 
-    @classmethod
-    def __get_pydantic_json_schema__(cls, schema):
-        schema.update(type="string")
-        return schema
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
-class UserBase(BaseModel):
-    username: str = Field(..., example="john_doe")
-    email: EmailStr = Field(..., example="john.doe@example.com")
-
-class UserCreate(UserBase):
-    password: str = Field(..., example="secret_password")
-
-class UserInDB(UserBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-
-class User(UserBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-
-    class Config:
-        json_encoders = {
-            ObjectId: str
-        }
+class TokenData(BaseModel):
+    username: str = None
