@@ -15,7 +15,7 @@ app = FastAPI(
 
 # MongoDB connection
 client = AsyncIOMotorClient("mongodb://localhost:27017")
-db = client.test_database
+db = client.aureus
 
 
 @app.post("/users/")

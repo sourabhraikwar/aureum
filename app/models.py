@@ -8,7 +8,7 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, *args, **kwargs):
+    def validate(cls, *args):
         for v in args:
             if not ObjectId.is_valid(v):
                 raise ValueError('Invalid objectid')
@@ -16,6 +16,7 @@ class PyObjectId(ObjectId):
 
     @classmethod
     def __get_pydantic_json_schema__(cls, schema):
+        breakpoint()
         schema.update(type="string")
         return schema
 
