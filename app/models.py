@@ -16,7 +16,6 @@ class PyObjectId(ObjectId):
 
     @classmethod
     def __get_pydantic_json_schema__(cls, schema):
-        breakpoint()
         schema.update(type="string")
         return schema
 
