@@ -1,4 +1,3 @@
-# Helper functions
 import base64
 from datetime import datetime, timedelta
 import os
@@ -11,12 +10,11 @@ from jose import JWTError, jwt
 from app.models import TokenData, UserInDB
 from .constants import ALGORITHM, SECRET_KEY, db, oauth2_scheme
 
+
 def get_password_hash(password: str) -> str:
     salt = os.urandom(32)
     key = sha256(password.encode("utf-8") + salt).digest()
     return base64.urlsafe_b64encode(salt + key).decode("utf-8")
-
-# app/models.py
 
 
 def verify_password(plain_password: str, stored_password: str) -> bool:
