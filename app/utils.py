@@ -8,9 +8,8 @@ from time import timezone
 from fastapi import Depends, HTTPException, status
 from jose import JWTError, jwt
 
-from app.main import ALGORITHM, SECRET_KEY, db, oauth2_scheme
 from app.models import TokenData, UserInDB
-
+from .constants import ALGORITHM, SECRET_KEY, db, oauth2_scheme
 
 def get_password_hash(password: str) -> str:
     salt = os.urandom(32)
