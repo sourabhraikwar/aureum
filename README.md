@@ -61,25 +61,18 @@ Aureum is a FastAPI-based project that implements user authentication and integr
 
 ```
 aureum/
-├── app/
-│   ├── auth/
-│   │   ├── __init__.py
-│   │   └── jwt_handler.py
-│   ├── config/
-│   │   ├── __init__.py
-│   │   └── config.py
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── user_model.py
-│   ├── routes/
-│   │   ├── __init__.py
-│   │   └── user.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── user_schema.py
-│   └── main.py
-├── .env
-├── .gitignore
+├── app
+│   ├── constants.py
+│   ├── __init__.py
+│   ├── main.py
+│   ├── models.py
+│   ├── routes.py
+│   ├── tests
+│   │   ├── conftests.py
+│   │   ├── __init__.py
+│   │   └── test_main.py
+│   └── utils.py
+├── pytest.ini
 ├── README.md
 └── requirements.txt
 ```
