@@ -66,9 +66,15 @@ async def update_user_partial(
 
 @router.put("/users/me", response_model=User)
 async def update_user_full(
-    user_update: UserInDB, current_user: User = Depends(get_current_user)
+    user_update: Dict[str, Any], current_user: User = Depends(get_current_user)
 ):
-    update_data = user_update.model_dump(exclude={"password"})
+    update_data = user_update.copy()
+    # Hash the new password if provided
+    if user_update.get("password"):
+        update_data["password"] = get_password_hash(user_update.get("password"))
+    else:
+        # If no new password provided, remove the password field to avoid overwriting with None
+        update_data.pop("password", None)
 
     update_result = await db.users.replace_one(
         {"username": current_user.username}, update_data

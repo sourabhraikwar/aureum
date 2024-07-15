@@ -1,5 +1,10 @@
-from datetime import datetime, timedelta
+import base64
+import datetime
+from datetime import timedelta
+import os
+from hashlib import sha256
 import pytz
+from datetime import datetime, timedelta
 from passlib.context import CryptContext
 
 from fastapi import Depends, HTTPException, status
@@ -55,8 +60,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
